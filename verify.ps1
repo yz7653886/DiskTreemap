@@ -124,3 +124,6 @@ if (Test-Path $test) { Remove-Item $test -Recurse -Force -ErrorAction SilentlyCo
 Write-Host ""
 Write-Host ("================ {0} passed, {1} failed ================" -f $pass, $fail)
 if ($fail -gt 0) { exit 1 }
+# Set the exit code explicitly: the CI shell otherwise surfaces a stale
+# $LASTEXITCODE left behind by the .exe invocations above.
+exit 0
