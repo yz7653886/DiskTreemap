@@ -8,6 +8,8 @@ native file operations.
 The whole app is one self-contained `.exe` built from a single C# file. No
 browser, no local server, no runtime to install beyond what ships with Windows.
 
+**English** · [简体中文](使用说明.md)
+
 ## Features
 
 - **Native WinForms UI** — a single ~72 KB executable built from one source file,
