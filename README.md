@@ -14,7 +14,7 @@ browser, no local server, no runtime to install beyond what ships with Windows.
 
 ## Features
 
-- **Native WinForms UI** — a single ~98 KB executable built from one source file,
+- **Native WinForms UI** — a single ~100 KB executable built from one source file,
   with no browser and no HTTP service involved.
 - **SpaceSniffer-style picker** — on launch you choose a drive or a folder and an
   aggregation threshold, instead of scanning something immediately.
