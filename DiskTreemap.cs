@@ -40,9 +40,9 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("DiskTreemap")]
 [assembly: AssemblyCompany("DiskTreemap contributors")]
 [assembly: AssemblyCopyright("Copyright (C) 2026 DiskTreemap contributors. MIT licensed.")]
-[assembly: AssemblyVersion("1.0.3.0")]
-[assembly: AssemblyFileVersion("1.0.3.0")]
-[assembly: AssemblyInformationalVersion("1.0.3")]
+[assembly: AssemblyVersion("1.0.4.0")]
+[assembly: AssemblyFileVersion("1.0.4.0")]
+[assembly: AssemblyInformationalVersion("1.0.4")]
 [assembly: ComVisible(false)]
 
 namespace DiskTreemap

@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > Releases 1.0, 1.0.1 and 1.0.2 have been withdrawn — they all carried the
 > context-menu crash that 1.0.3 fixes. Their notes are kept below for reference.
 
+## [1.0.4] - 2026-10-05
+
+### Changed
+
+- The "of total" percentage in the status bar now shows two decimals. Measured
+  against a whole drive a few hundred MB used to read as `0.0%`, which looks
+  like nothing; it now reads as e.g. `0.02%`.
+
+[1.0.4]: https://github.com/yz7653886/DiskTreemap/releases/tag/v1.0.4
+
 ## [1.0.3] - 2026-10-05
 
 ### Fixed
