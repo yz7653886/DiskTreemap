@@ -2933,7 +2933,8 @@ namespace DiskTreemap
                 long total = DriveTotal(_focus.FullPath);
                 if (total <= 0) total = _root != null ? _root.Size : 0;
                 double pct = total > 0 ? _focus.Size * 100.0 / total : 0;
-                string pctText = pct.ToString("0.0", CultureInfo.InvariantCulture) + "%";
+                // 两位小数：整盘做分母时，几百 MB 的目录用一位小数会显示成 0.0%，看起来像零
+                string pctText = pct.ToString("0.00", CultureInfo.InvariantCulture) + "%";
                 _lblFocus.Text = _focus.Name + "   " + PathPickerForm.Fmt(_focus.Size)
                     + string.Format(CultureInfo.InvariantCulture, Loc.T("   （占总量 {0}）"), pctText);
             }
