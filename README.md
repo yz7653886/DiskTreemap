@@ -10,9 +10,11 @@ browser, no local server, no runtime to install beyond what ships with Windows.
 
 **English** · [简体中文](使用说明.md)
 
+![DiskTreemap screenshot](docs/screenshot.png)
+
 ## Features
 
-- **Native WinForms UI** — a single ~72 KB executable built from one source file,
+- **Native WinForms UI** — a single ~98 KB executable built from one source file,
   with no browser and no HTTP service involved.
 - **SpaceSniffer-style picker** — on launch you choose a drive or a folder and an
   aggregation threshold, instead of scanning something immediately.
@@ -50,14 +52,28 @@ browser, no local server, no runtime to install beyond what ships with Windows.
 | `verify.ps1` | CLI acceptance suite (19 assertions). |
 | `app.manifest` | Win32 manifest: `asInvoker`, supported OS list, DPI awareness. |
 | `app.ico` | Multi-resolution application icon (16 / 32 / 48 / 64 / 256). |
+| `docs/screenshot.png` | Application screenshot used in this README. |
 | `README.md` | This file. |
 | `使用说明.md` | End-user guide (Chinese). |
+| `CHANGELOG.md` | Release history. |
+| `CONTRIBUTING.md` | How to build, test and submit changes. |
+| `SECURITY.md` | How to report a vulnerability. |
 | `LICENSE` | MIT licence. |
 | `.gitignore` | Ignores the build output (`*.exe`) and scratch files. |
 | `.gitattributes` | Pins line endings to LF so checkouts are deterministic. |
+| `.github/workflows/build.yml` | CI: builds the exe and runs the acceptance suite. |
+| `.github/ISSUE_TEMPLATE/` | Issue templates. |
 
 `DiskTreemap.exe` is a build artifact and is **not** committed — run `build.ps1`
-to produce it.
+to produce it, or grab the one attached to the latest release.
+
+## Requirements
+
+- **Windows 7 SP1 or later** (Windows 10 / 11 recommended). The UI is a WinForms
+  application, so it needs the .NET Framework 4.x runtime — included with
+  Windows 8 and later; on Windows 7, install .NET Framework 4.x first.
+- **Building from source** needs only the C# compiler (`csc.exe`) that ships
+  with the .NET Framework — no SDK, no Visual Studio, no NuGet restore.
 
 ## Build
 
@@ -77,10 +93,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File verify.ps1
 It builds a small fixture tree in `%TEMP%`, then checks the JSON output shape,
 aggregation behaviour, argument handling and error exit codes.
 
+CI runs `build.ps1` followed by `verify.ps1` on every push and pull request.
+
 ## Usage
 
-Build the executable first (`build.ps1`), then run it to open the picker, or pass
-a root to go straight to the viewer:
+Download the prebuilt `DiskTreemap.exe` from the
+[latest release](https://github.com/yz7653886/DiskTreemap/releases/latest), or
+build it yourself with `build.ps1`. Then run it to open the picker, or pass a
+root to go straight to the viewer:
 
 ```powershell
 .\DiskTreemap.exe                     # open the drive / folder picker
@@ -149,9 +169,10 @@ malware family. Compiled-on-demand tools that carry version info but no signatur
 tend to collect this kind of hit, and some engines are known for flagging freshly
 compiled programs in general.
 
-If you would rather not trust a prebuilt binary, build it yourself: the whole
-program is one C# file, and `build.ps1` needs nothing beyond the compiler that
-ships with Windows.
+If you would rather not trust the prebuilt binary attached to a release, build
+it yourself: the whole program is one C# file, and `build.ps1` needs nothing
+beyond the compiler that ships with Windows. Each release also publishes a
+SHA-256 checksum of the executable so you can verify the download.
 
 ## License
 
