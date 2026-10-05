@@ -32,7 +32,10 @@ if (-not $Exe) { $Exe = Join-Path $PSScriptRoot 'DiskTreemap.exe' }
 $Exe = [IO.Path]::GetFullPath($Exe)
 
 $work = Join-Path $env:TEMP 'disk_treemap_verify'
-$test = Join-Path $work 'dt_test'
+# %TEMP% can be an 8.3 short path (e.g. C:\Users\RUNNER~1\... on CI). The
+# application reports the long form via Path.GetFullPath, so normalise here too
+# before comparing the scanned root.
+$test = [IO.Path]::GetFullPath((Join-Path $work 'dt_test'))
 
 if (-not (Test-Path $Exe)) { throw ("exe not found: " + $Exe) }
 New-Item -ItemType Directory -Force -Path $work | Out-Null
