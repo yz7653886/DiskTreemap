@@ -7,6 +7,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > Releases 1.0, 1.0.1 and 1.0.2 have been withdrawn — they all carried the
 > context-menu crash that 1.0.3 fixes. Their notes are kept below for reference.
 
+## [1.0.5] - 2026-10-06
+
+### Fixed
+
+- The aggregated small-files node was labelled with hard-coded English in every
+  UI language (the Chinese UI showed `(2 small files)`), and it used the plural
+  form even for a single file (`(1 small files)`). It is now localised —
+  `(2 small files)` / `(1 small file)` in English, `(2 个小文件)` in Chinese.
+- Scanning a directory tree deep enough to exhaust the 1 MB stack (around 10,000
+  levels, reachable once long paths are enabled) killed the process with an
+  uncatchable `StackOverflowException`. The scan now runs on a dedicated thread
+  with an 8 MB stack, in both the GUI and the `--out` CLI path.
+
+[1.0.5]: https://github.com/yz7653886/DiskTreemap/releases/tag/v1.0.5
+
 ## [1.0.4] - 2026-10-05
 
 ### Changed
