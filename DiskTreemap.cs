@@ -40,9 +40,9 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("DiskTreemap")]
 [assembly: AssemblyCompany("DiskTreemap contributors")]
 [assembly: AssemblyCopyright("Copyright (C) 2026 DiskTreemap contributors. MIT licensed.")]
-[assembly: AssemblyVersion("1.0.2.0")]
-[assembly: AssemblyFileVersion("1.0.2.0")]
-[assembly: AssemblyInformationalVersion("1.0.2")]
+[assembly: AssemblyVersion("1.0.3.0")]
+[assembly: AssemblyFileVersion("1.0.3.0")]
+[assembly: AssemblyInformationalVersion("1.0.3")]
 [assembly: ComVisible(false)]
 
 namespace DiskTreemap
@@ -2988,6 +2988,20 @@ namespace DiskTreemap
 
         /* --------------------------- context menu ------------------------ */
 
+        // 不能在 Closed 里直接 Dispose：ToolStripManager 的模态菜单过滤器会继续处理
+        // 本轮输入，之后再碰到这个已释放的下拉菜单就抛 ObjectDisposedException
+        // （表现为“关掉菜单后点一下主窗口就报错”）。排到消息队列末尾再释放。
+        private void DisposeMenuLater(ContextMenuStrip menu)
+        {
+            if (menu == null) return;
+            try
+            {
+                if (IsDisposed || !IsHandleCreated) { menu.Dispose(); return; }
+                BeginInvoke((MethodInvoker)delegate { try { menu.Dispose(); } catch { } });
+            }
+            catch { }
+        }
+
         private void ShowMenu(Node n)
         {
             ContextMenuStrip menu = new ContextMenuStrip();
@@ -3014,7 +3028,7 @@ namespace DiskTreemap
                 miPick.Click += delegate { PickPath(); };
                 menu.Items.Add(miPick);
 
-                menu.Closed += delegate { menu.Dispose(); };
+                menu.Closed += delegate { DisposeMenuLater(menu); };
                 menu.Show(Cursor.Position);
                 return;
             }
@@ -3064,7 +3078,7 @@ namespace DiskTreemap
             miDelete.Click += delegate { DeleteNode(n); };
             menu.Items.Add(miDelete);
 
-            menu.Closed += delegate { menu.Dispose(); };   // 每次右键都会新建菜单，关闭后释放
+            menu.Closed += delegate { DisposeMenuLater(menu); };
             menu.Show(Cursor.Position);
         }
 
