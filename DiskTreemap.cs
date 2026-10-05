@@ -105,6 +105,14 @@ namespace DiskTreemap
             return En.TryGetValue(zh, out en) ? en : zh;
         }
 
+        // 聚合分组名。带数量，无法用固定词条表达，故单独处理（英文需区分单复数）
+        public static string AggName(int count)
+        {
+            string n = count.ToString(CultureInfo.InvariantCulture);
+            if (IsZh) return "(" + n + " 个小文件)";
+            return count == 1 ? "(1 small file)" : "(" + n + " small files)";
+        }
+
         private static readonly Dictionary<string, string> En =
             new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -455,7 +463,7 @@ namespace DiskTreemap
             if (smallCnt > 0)
             {
                 Node agg = new Node();
-                agg.Name = "(" + smallCnt.ToString(CultureInfo.InvariantCulture) + " small files)";
+                agg.Name = Loc.AggName(smallCnt);
                 agg.Size = smallSum;
                 agg.IsDir = false;
                 agg.IsAgg = true;
@@ -2791,17 +2799,27 @@ namespace DiskTreemap
             string scanPath = path;
             long min = minFile;
 
-            Task.Factory.StartNew(delegate
+            // 扫描要有足够大的栈：目录树深度被路径长度限制在约 1.6 万层，
+            // 而 ComputeSize / ToNode / WriteJsonNode 都是递归的，默认 1 MB 的
+            // 线程池栈约 1 万层就溢出（StackOverflowException 无法捕获，进程直接消失）。
+            // 8 MB 栈按实测约 100 字节/帧算有 5 倍余量，故用专用线程而非线程池。
+            var tcs = new TaskCompletionSource<object[]>();
+            Thread worker = new Thread((ThreadStart)delegate
             {
                 try
                 {
                     Scanner.Stats st;
                     Node root = Scanner.Scan(scanPath, min, out st,
                         delegate { return _cancel || gen != _scanGen; });
-                    return new object[] { root, st };
+                    tcs.TrySetResult(new object[] { root, st });
                 }
-                catch (OperationCanceledException) { return null; }
-            }).ContinueWith(delegate(Task<object[]> t)
+                catch (OperationCanceledException) { tcs.TrySetResult(null); }
+                catch (Exception ex) { tcs.TrySetException(ex); }
+            }, 8 * 1024 * 1024);
+            worker.IsBackground = true;
+            worker.Start();
+
+            tcs.Task.ContinueWith(delegate(Task<object[]> t)
             {
                 if (IsDisposed || !IsHandleCreated) return;
                 try
@@ -3349,6 +3367,18 @@ namespace DiskTreemap
             if (!Directory.Exists(full)) return CliFail(Loc.T("目录不存在: ") + full);
 
             Console.WriteLine("DiskTreemap");
+
+            // CLI 与 GUI 同样要防深目录栈溢出（ToNode / WriteJsonNode 递归），
+            // 主线程栈在 PE 头里定死为 1 MB，改不了，因此另起一个大栈线程跑扫描。
+            int exit = 0;
+            Thread worker = new Thread((ThreadStart)delegate { exit = RunCliScan(full, outFile, minFile); }, 8 * 1024 * 1024);
+            worker.Start();
+            worker.Join();
+            return exit;
+        }
+
+        private static int RunCliScan(string full, string outFile, long minFile)
+        {
             Console.WriteLine(Loc.T("扫描目录: ") + full);
             Stopwatch sw = Stopwatch.StartNew();
             Scanner.Stats st;

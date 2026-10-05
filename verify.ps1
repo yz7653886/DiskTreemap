@@ -74,12 +74,14 @@ Check "root field" ($j.root -ieq $test) ("got " + $j.root)
 Check ("root size = " + $expectedTotal) ($j.tree.s -eq $expectedTotal) ("got " + $j.tree.s)
 $kids = $j.tree.c
 $names = ($kids | ForEach-Object { $_.n }) -join ','
-Check "root children names" ($names -match 'sub' -and $names -match 'big\.bin' -and $names -match 'small files') ("got " + $names)
+# The aggregation node's label is localised (the CLI follows the Windows UI
+# language), so it is matched by the "agg" flag below rather than by English text.
+Check "root children names" ($names -match 'sub' -and $names -match 'big\.bin') ("got " + $names)
 $rootAgg = @($kids | Where-Object { $_.agg -eq 1 })
 Check "root agg node count = 1" ($rootAgg.Count -eq 1) ("got " + $rootAgg.Count)
 $sb = $kids | Where-Object { $_.n -eq 'sub' }
 Check "sub has inner.bin + agg" ($sb.c.Count -eq 2) ("got " + $sb.c.Count)
-Check "root agg k = 1" ($rootAgg[0].k -eq 1) ("got " + $rootAgg[0].k)
+Check "root agg label + k = 1" ($rootAgg[0].k -eq 1 -and $rootAgg[0].n.Length -gt 0) ("name=" + $rootAgg[0].n + " k=" + $rootAgg[0].k)
 $subAgg = @($sb.c | Where-Object { $_.agg -eq 1 })
 Check "sub agg k = 1" ($subAgg.Count -eq 1 -and $subAgg[0].k -eq 1) ("count=" + $subAgg.Count + " k=" + $subAgg[0].k)
 
