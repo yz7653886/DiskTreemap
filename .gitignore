@@ -3,8 +3,19 @@ demo.json
 treemap.json
 *.treemap.json
 
-# scratch
-_check/
+# build / scratch
 bin/
 obj/
+_check/
 *.log
+_*.png
+
+# build output (regenerate with build.ps1)
+*.exe
+*.pdb
+
+# OS / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+.vs/

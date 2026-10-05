@@ -1,0 +1,8 @@
+# 仓库内统一使用 LF，避免跨平台换行符抖动
+* text=auto eol=lf
+
+# 二进制文件
+*.exe binary
+*.pdb binary
+*.png binary
+*.ico binary

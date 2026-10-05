@@ -1,38 +1,61 @@
 # DiskTreemap
 
 A fast, single-file disk-usage treemap viewer for Windows — a lightweight
-alternative to SpaceSniffer. Point it at a folder and it renders an interactive
-squarified treemap you can drill into, with a right-click menu for native file
-operations.
+alternative to SpaceSniffer. Pick a drive or folder, and it renders an
+interactive squarified treemap you can drill into, with a right-click menu for
+native file operations.
+
+The whole app is one self-contained `.exe` built from a single C# file. No
+browser, no local server, no runtime to install beyond what ships with Windows.
 
 ## Features
 
+- **Native WinForms UI** — a single ~72 KB executable built from one source file,
+  with no browser and no HTTP service involved.
+- **SpaceSniffer-style picker** — on launch you choose a drive or a folder and an
+  aggregation threshold, instead of scanning something immediately.
 - **Parallel scanner** — walks the tree with `Parallel.ForEach` (CPU x2 workers)
-  and skips junctions/symlinks to avoid loops.
-- **Small-file aggregation** — files below `--min` bytes are collapsed into a
-  single `(N small files)` node per folder, keeping the output small and legible.
-- **Self-contained executable** — `DiskTreemap.exe` embeds the viewer as a
-  manifest resource; no external files required.
-- **Local, token-guarded service** — serves the UI on `127.0.0.1` from a random
-  port, and exposes a small API for open / reveal / copy-path / recycle-bin delete.
-- **Apple-style context menu** in the viewer, with clipboard fallback and
-  viewport-edge clamping.
-- **Static HTML output** — `index.html` is a standalone viewer you can double-click
-  or share; it works with or without the native bridge.
+  and skips junctions / symlinks to avoid loops.
+- **Small-file aggregation** — files below the threshold are collapsed into a
+  single `(N small files)` node per folder, keeping the output legible.
+- **Nested container view** — every folder is drawn as a labelled frame with a
+  header bar, so the root drive and each level down are visually distinct.
+- **Drill-down navigation** — double-click a folder cell to make it the new root;
+  double-clicking a file jumps the view to the folder that holds it, and only
+  opens the file when it already sits directly inside the current view. Back / up
+  / path history are all available from the title bar.
+- **Native context actions** — open, reveal in Explorer, properties, copy path or
+  name, and move to the Recycle Bin (recoverable, never a hard delete).
+- **Custom borderless window** — macOS-style traffic-light buttons, an integrated
+  icon toolbar, a rounded path pill and rounded window corners.
+- **Light / dark theme** — follows the Windows app theme automatically
+  (`AppsUseLightTheme`, refreshed on `WM_SETTINGCHANGE`). A one-click toggle sits
+  in the title bar, and a manual choice is remembered in
+  `HKCU\Software\DiskTreemap` so it survives restarts.
+- **Automatic English / Chinese UI** — the interface language follows the Windows
+  display language (Chinese for `zh-*`, English otherwise). Every label, tooltip,
+  menu and CLI message is localised.
+- **DPI aware** — the process declares itself DPI aware so the UI is rendered at
+  the native resolution instead of being bitmap-stretched on scaled displays.
+- **Headless CLI mode** — scan to JSON without opening a window.
 
 ## Project layout
 
 | File | Purpose |
 | --- | --- |
-| `DiskTreemap.cs` | Source of the scanner + local HTTP service + native actions. |
-| `DiskTreemap.exe` | Built self-contained executable (the deliverable). |
-| `index.template.html` | Viewer template with a `__DEMO_DATA__` placeholder. |
-| `index.html` | Standalone viewer generated from a scan result. |
-| `scan-treemap.ps1` | PowerShell-only scanner producing the treemap JSON. |
+| `DiskTreemap.cs` | The entire application: scanner, treemap layout, renderer, WinForms UI and CLI. |
 | `build.ps1` | Compiles `DiskTreemap.cs` into `DiskTreemap.exe`. |
-| `build-index.ps1` | Injects a scan JSON into the template to produce `index.html`. |
-| `verify.ps1` | End-to-end acceptance test (CLI + service + security, 31 assertions). |
+| `verify.ps1` | CLI acceptance suite (19 assertions). |
+| `app.manifest` | Win32 manifest: `asInvoker`, supported OS list, DPI awareness. |
+| `app.ico` | Multi-resolution application icon (16 / 32 / 48 / 64 / 256). |
+| `README.md` | This file. |
 | `使用说明.md` | End-user guide (Chinese). |
+| `LICENSE` | MIT licence. |
+| `.gitignore` | Ignores the build output (`*.exe`) and scratch files. |
+| `.gitattributes` | Pins line endings to LF so checkouts are deterministic. |
+
+`DiskTreemap.exe` is a build artifact and is **not** committed — run `build.ps1`
+to produce it.
 
 ## Build
 
@@ -40,24 +63,28 @@ operations.
 powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1
 ```
 
-Requires the .NET Framework 4.x C# compiler (`csc.exe`), which ships with Windows.
+Requires the .NET Framework 4.x C# compiler (`csc.exe`), which ships with
+Windows. The script locates it automatically and prints the output size.
 
-Run the acceptance suite afterwards (31 assertions across the CLI, the local
-service, and the security boundaries):
+Run the acceptance suite afterwards:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File verify.ps1
 ```
 
+It builds a small fixture tree in `%TEMP%`, then checks the JSON output shape,
+aggregation behaviour, argument handling and error exit codes.
+
 ## Usage
 
-Run the executable (defaults to the current directory, opens a browser):
+Build the executable first (`build.ps1`), then run it to open the picker, or pass
+a root to go straight to the viewer:
 
 ```powershell
-.\DiskTreemap.exe
+.\DiskTreemap.exe                     # open the drive / folder picker
 .\DiskTreemap.exe "C:\Users"
-.\DiskTreemap.exe "C:\" --min 1048576 --port 8731 --no-open
-.\DiskTreemap.exe --out tree.json "D:\Projects"
+.\DiskTreemap.exe "D:\" --min 10485760
+.\DiskTreemap.exe "D:\Projects" --out tree.json
 .\DiskTreemap.exe --help
 ```
 
@@ -65,31 +92,65 @@ Options:
 
 | Option | Meaning |
 | --- | --- |
-| `--out <file>` / `-o` | Write the scan JSON to a file and exit. |
-| `--min <bytes>` / `--min-file` | Aggregation threshold (default 1048576). |
-| `--port <n>` | Fixed port; `0` (default) picks a free one. |
-| `--no-open` | Do not launch a browser. |
+| `--out <file>` / `-o` | Scan only, write the JSON tree to a file and exit (no window). |
+| `--min <bytes>` / `--min-file` | Aggregation threshold (default `1048576`). `0` disables aggregation. |
 | `--help` / `-h` / `/?` | Show help. |
 
-PowerShell-only path (no executable), then build the static viewer:
+The exit code is `2` on a usage or scan error, `0` otherwise.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scan-treemap.ps1 -Root "C:\Users" -Out demo.json
-powershell -NoProfile -ExecutionPolicy Bypass -File build-index.ps1 -Json demo.json
-```
+### Keyboard shortcuts
 
-## Security design
+| Key | Action |
+| --- | --- |
+| `Backspace` | Go to the parent folder |
+| `Alt` + `←` | Back (history) |
+| `F5` | Rescan the current root |
+| `Ctrl` + `C` | Copy the full path of the selected cell |
 
-- Binds **only** to loopback (`127.0.0.1`); nothing is exposed to the network.
-- Random port and a random per-run token, accepted via the `X-DT-Token` header
-  or a `?t=` query parameter; comparison is constant-time.
-- `Host` header is validated against `127.0.0.1` / `localhost` / `::1` with a
-  matching port, blocking DNS-rebinding attempts.
-- Every path is normalized and must stay inside the scan root; reparse points
-  (in the final component or any ancestor), NUL bytes, and missing paths are rejected.
-- Deletion goes through `SHFileOperation` with `FOF_ALLOWUNDO`, i.e. the recycle
-  bin — and the scan root itself can never be deleted.
+Mouse: drag to pan, wheel to zoom, double-click a folder cell to enter it,
+double-click a file to open it when it already sits directly in the current
+folder (otherwise the view jumps to the folder that contains it), and right-click
+any cell for the native action menu. Drag any edge or corner of the borderless
+window to resize it.
+
+## Design notes
+
+- **Squarified treemap** — `TreemapLayout.Squarify` lays children out by area
+  while keeping aspect ratios near 1, so labels stay readable.
+- **Sharp, shared edges** — cells use square corners and ~1 px borders so siblings
+  sit flush against each other, SpaceSniffer style.
+- **Two view scales** — entering a folder fills the viewport 1:1; *适应* (fit)
+  drops to ~0.8 and centres the map for comfortable breathing room.
+- **Labels degrade gracefully** — a cell is labelled `name  size`; when that does
+  not fit, the size is dropped so the full folder name stays readable in narrow
+  columns instead of being cut to `Reso…`.
+- **Theme is centralised** — `Palette` holds a light and a dark colour set;
+  `Theme` holds the accent colour and chrome colours. Switching the theme
+  re-applies both to the canvas, toolbar renderer, status bar and menus.
+- **Localisation** — one `Loc` table maps the Chinese source strings to English;
+  the language is chosen once at startup from the Windows UI language, and any
+  string without a translation falls back to Chinese.
+- **DPI aware** — the process calls `SetProcessDPIAware()` and derives the treemap
+  header height from the font metrics, so text stays sharp and unclipped on scaled
+  displays.
+- **Borderless resizing** — the docked children (title bar, canvas, status bar)
+  return `HTTRANSPARENT` in the 6 px border zone so `WM_NCHITTEST` reaches the
+  form and all eight resize directions work.
+
+## Antivirus false positives
+
+The binary is **not code-signed**, so a few heuristic / machine-learning engines
+may flag a fresh build. Verdicts such as `ML.Attribute.HighConfidence`,
+`Malicious.high.ml.score`, `Malicious (high Confidence)` or `*.susgen` are generic
+ML scores aimed at new, unsigned, low-prevalence binaries — they do not name a
+malware family. Compiled-on-demand tools that carry version info but no signature
+tend to collect this kind of hit, and some engines are known for flagging freshly
+compiled programs in general.
+
+If you would rather not trust a prebuilt binary, build it yourself: the whole
+program is one C# file, and `build.ps1` needs nothing beyond the compiler that
+ships with Windows.
 
 ## License
 
-Internal tool — adapt as needed.
+MIT — see [LICENSE](LICENSE).
