@@ -19,7 +19,11 @@ browser, no local server, no runtime to install beyond what ships with Windows.
 - **SpaceSniffer-style picker** — on launch you choose a drive or a folder and an
   aggregation threshold, instead of scanning something immediately.
 - **Parallel scanner** — walks the tree with `Parallel.ForEach` (CPU x2 workers)
-  and skips junctions / symlinks to avoid loops.
+  and skips junctions / symlinks (files as well as directories) to avoid loops
+  and double counting.
+- **Honest totals** — directories that cannot be read are skipped and counted;
+  the count is reported in the CLI output and the window title, so an
+  under-reported size is never silently passed off as exact.
 - **Small-file aggregation** — files below the threshold are collapsed into a
   single `(N small files)` node per folder, keeping the output legible.
 - **Nested container view** — every folder is drawn as a labelled frame with a
@@ -41,8 +45,11 @@ browser, no local server, no runtime to install beyond what ships with Windows.
 - **Automatic English / Chinese UI** — the interface language follows the Windows
   display language (Chinese for `zh-*`, English otherwise). Every label, tooltip,
   menu and CLI message is localised.
-- **DPI aware** — the process declares itself DPI aware so the UI is rendered at
+- **System-DPI aware** — the process declares DPI awareness so the UI is drawn at
   the native resolution instead of being bitmap-stretched on scaled displays.
+  This is *system* DPI awareness, not per-monitor: on a mixed-DPI multi-monitor
+  setup the window may not rescale after being moved to a differently scaled
+  display.
 - **Headless CLI mode** — scan to JSON without opening a window.
 
 ## Project layout
@@ -116,7 +123,7 @@ Options:
 
 | Option | Meaning |
 | --- | --- |
-| `--out <file>` / `-o` | Scan only, write the JSON tree to a file and exit (no window). |
+| `--out <file>` / `-o` | Scan only, write the JSON tree to a file and exit (no window). A root directory must be given explicitly. |
 | `--min <bytes>` / `--min-file` | Aggregation threshold (default `1048576`). `0` disables aggregation. |
 | `--help` / `-h` / `/?` | Show help. |
 
@@ -154,9 +161,11 @@ window to resize it.
 - **Localisation** — one `Loc` table maps the Chinese source strings to English;
   the language is chosen once at startup from the Windows UI language, and any
   string without a translation falls back to Chinese.
-- **DPI aware** — the process calls `SetProcessDPIAware()` and derives the treemap
-  header height from the font metrics, so text stays sharp and unclipped on scaled
-  displays.
+- **DPI aware (system)** — the process calls `SetProcessDPIAware()` and derives the
+  treemap header height from the font metrics, so text stays sharp and unclipped on
+  scaled displays. Per-monitor DPI is not implemented: WinForms on .NET Framework
+  4.x has no per-monitor support, so on mixed-DPI setups the window keeps the
+  scale of the monitor it started on.
 - **Borderless resizing** — the docked children (title bar, canvas, status bar)
   return `HTTRANSPARENT` in the 6 px border zone so `WM_NCHITTEST` reaches the
   form and all eight resize directions work.

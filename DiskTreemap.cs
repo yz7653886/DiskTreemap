@@ -40,9 +40,9 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("DiskTreemap")]
 [assembly: AssemblyCompany("DiskTreemap contributors")]
 [assembly: AssemblyCopyright("Copyright (C) 2026 DiskTreemap contributors. MIT licensed.")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
-[assembly: AssemblyInformationalVersion("1.0.0")]
+[assembly: AssemblyVersion("1.0.1.0")]
+[assembly: AssemblyFileVersion("1.0.1.0")]
+[assembly: AssemblyInformationalVersion("1.0.1")]
 [assembly: ComVisible(false)]
 
 namespace DiskTreemap
@@ -188,6 +188,7 @@ namespace DiskTreemap
 
             // ---- 命令行 ----
             { "--out 缺少参数", "--out requires a value" },
+            { "--out 需要指定扫描根目录", "--out requires a scan root" },
             { "--min 缺少参数", "--min requires a value" },
             { "--min 必须是 >= 0 的整数（字节）", "--min must be an integer >= 0 (bytes)" },
             { "未知参数: ", "Unknown argument: " },
@@ -199,6 +200,8 @@ namespace DiskTreemap
             { "扫描目录: ", "Scanning: " },
             { "完成: {0:n1}s  文件 {1:n0}  目录 {2:n0}  聚合节点 {3:n0}  最大深度 {4}", "Done: {0:n1}s  files {1:n0}  dirs {2:n0}  agg nodes {3:n0}  max depth {4}" },
             { "已写出 {0} ({1:n1} KB)", "Wrote {0} ({1:n1} KB)" },
+            { "跳过 {0} 个无法读取的目录或文件（大小被低估）", "skipped {0} unreadable entries (sizes are under-reported)" },
+            { "   （{0} 个目录无法读取）", "   ({0} entries could not be read)" },
             { "错误: ", "Error: " },
             { "发生未处理的错误：", "Unhandled error: " },
             { "DiskTreemap - 磁盘占用树状图（SpaceSniffer 的原生替代品）", "DiskTreemap - disk usage treemap (a native SpaceSniffer alternative)" },
@@ -240,6 +243,7 @@ namespace DiskTreemap
             public long AggNodes;
             public long AggFiles;
             public long MaxDepth;
+            public long Skipped;   // 无法读取的目录 / 条目数量（大小会被低估）
         }
 
         public static Node Scan(string root, long minFile, out Stats stats, Func<bool> cancelled)
@@ -249,6 +253,7 @@ namespace DiskTreemap
             if (string.IsNullOrEmpty(rootName)) rootName = rootDi.FullName;
 
             bool stop = false;
+            long skipped = 0;   // 多线程累加，只能走 Interlocked
 
             ConcurrentDictionary<string, Dir> map =
                 new ConcurrentDictionary<string, Dir>(StringComparer.OrdinalIgnoreCase);
@@ -309,11 +314,11 @@ namespace DiskTreemap
                                             lock (node) { node.Files.Add(fe); }
                                         }
                                     }
-                                    catch { }
-                                }
+                                    catch { Interlocked.Increment(ref skipped); }
                             }
-                            catch { }
-                        });
+                        }
+                        catch { Interlocked.Increment(ref skipped); }
+                    });
                 }
                 catch (AggregateException) { }
 
@@ -324,6 +329,7 @@ namespace DiskTreemap
             ComputeSize(rootNode);
 
             stats = new Stats();
+            stats.Skipped = skipped;
             Node tree = ToNode(rootNode, rootDi.FullName, minFile, stats, 0);
             return tree;
         }
@@ -920,11 +926,20 @@ namespace DiskTreemap
 
     internal static class Style
     {
-        // 单文件程序没有独立的图标资源：从自身 exe 取出内嵌图标给窗口 / 任务栏用
+        // 单文件程序没有独立的图标资源：从自身 exe 取出内嵌图标给窗口 / 任务栏用。
+        // 只取一次并缓存——ExtractAssociatedIcon 每次都新建 Icon，反复调用会白占 GDI 句柄。
+        private static Icon _appIcon;
+        private static bool _appIconLoaded;
+
         public static Icon AppIcon()
         {
-            try { return Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
-            catch { return null; }
+            if (!_appIconLoaded)
+            {
+                _appIconLoaded = true;
+                try { _appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
+                catch { _appIcon = null; }
+            }
+            return _appIcon;
         }
 
         // 主窗口为无边框；铺满客户区的子控件必须在窗口边框区把命中测试还给 Form，
@@ -1009,13 +1024,18 @@ namespace DiskTreemap
         {
             try
             {
+                // 赋新 Region 前先接住旧的：WinForms 不会替我们释放它
+                Region old = f.Region;
                 if (f.WindowState == FormWindowState.Maximized || f.Width < 24 || f.Height < 24)
                 {
                     f.Region = null;
-                    return;
                 }
-                using (GraphicsPath gp = RoundedPath(new Rectangle(0, 0, f.Width, f.Height), 12))
-                    f.Region = new Region(gp);
+                else
+                {
+                    using (GraphicsPath gp = RoundedPath(new Rectangle(0, 0, f.Width, f.Height), 12))
+                        f.Region = new Region(gp);
+                }
+                if (old != null) old.Dispose();
             }
             catch { }
         }
@@ -1374,6 +1394,7 @@ namespace DiskTreemap
         private Node _selected;
 
         private bool _dragging;
+        private bool _leftDown;   // 不能用 _downScreen == Point.Empty 判断：正好点在 (0,0) 时会误判
         private Point _downScreen;
         private float _downTx, _downTy;
 
@@ -1754,6 +1775,7 @@ namespace DiskTreemap
             if (e.Button == MouseButtons.Left)
             {
                 _dragging = false;
+                _leftDown = true;
                 _downScreen = e.Location;
                 _downTx = _tx;
                 _downTy = _ty;
@@ -1769,7 +1791,7 @@ namespace DiskTreemap
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            if ((e.Button & MouseButtons.Left) != 0 && _downScreen != Point.Empty)
+            if (_leftDown && (e.Button & MouseButtons.Left) != 0)
             {
                 int dx = e.X - _downScreen.X;
                 int dy = e.Y - _downScreen.Y;
@@ -1798,6 +1820,7 @@ namespace DiskTreemap
             if (e.Button != MouseButtons.Left) return;
             bool wasDrag = _dragging;
             _dragging = false;
+            _leftDown = false;
             _downScreen = Point.Empty;
             if (wasDrag) return;
 
@@ -2711,8 +2734,12 @@ namespace DiskTreemap
                         _canvas.SetFocus(root);
                         SetScanning(false);
                         UpdateChrome();
-                        Text = string.Format(CultureInfo.InvariantCulture,
+                        string title = string.Format(CultureInfo.InvariantCulture,
                             Loc.T("DiskTreemap - {0}   （{1}）"), _scanPath, PathPickerForm.Fmt(root.Size));
+                        if (st.Skipped > 0)
+                            title += string.Format(CultureInfo.InvariantCulture,
+                                Loc.T("   （{0} 个目录无法读取）"), st.Skipped);
+                        Text = title;
                     });
                 }
                 // 关窗竞态（ObjectDisposedException 派生自 InvalidOperationException）一并忽略
@@ -3181,10 +3208,12 @@ namespace DiskTreemap
                 return 0;
             }
 
-            string root = string.IsNullOrEmpty(rootArg) ? Directory.GetCurrentDirectory() : rootArg;
+            // --out 必须显式给出扫描根目录：以前缺省会默默扫描当前工作目录
+            if (string.IsNullOrEmpty(rootArg)) return CliFail(Loc.T("--out 需要指定扫描根目录"));
+
             string full;
-            try { full = Path.GetFullPath(root); }
-            catch { return CliFail(Loc.T("无法解析根目录: ") + root); }
+            try { full = Path.GetFullPath(rootArg); }
+            catch { return CliFail(Loc.T("无法解析根目录: ") + rootArg); }
             if (!Directory.Exists(full)) return CliFail(Loc.T("目录不存在: ") + full);
 
             Console.WriteLine("DiskTreemap");
@@ -3198,6 +3227,9 @@ namespace DiskTreemap
             Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
                 Loc.T("完成: {0:n1}s  文件 {1:n0}  目录 {2:n0}  聚合节点 {3:n0}  最大深度 {4}"),
                 sw.Elapsed.TotalSeconds, st.Files, st.Dirs, st.AggNodes, st.MaxDepth));
+            if (st.Skipped > 0)
+                Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                    Loc.T("跳过 {0} 个无法读取的目录或文件（大小被低估）"), st.Skipped));
 
             string json = Scanner.ToJson(full, tree);
             try
