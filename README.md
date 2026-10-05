@@ -29,7 +29,9 @@ browser, no local server, no runtime to install beyond what ships with Windows.
   opens the file when it already sits directly inside the current view. Back / up
   / path history are all available from the title bar.
 - **Native context actions** — open, reveal in Explorer, properties, copy path or
-  name, and move to the Recycle Bin (recoverable, never a hard delete).
+  name, and move to the Recycle Bin (restorable in the usual case; an item too
+  large for the bin, or on a drive without one, is deleted permanently and the
+  system warns before doing so).
 - **Custom borderless window** — macOS-style traffic-light buttons, an integrated
   icon toolbar, a rounded path pill and rounded window corners.
 - **Light / dark theme** — follows the Windows app theme automatically

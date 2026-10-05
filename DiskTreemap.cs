@@ -183,7 +183,7 @@ namespace DiskTreemap
             { "打开失败：", "Open failed: " },
             { "打开资源管理器失败：", "Failed to open Explorer: " },
             { "打开属性失败：", "Failed to open properties: " },
-            { "确定要把下面这项移到回收站吗？\r\n\r\n{0}\r\n\r\n（可从回收站还原）", "Move the following item to the Recycle Bin?\r\n\r\n{0}\r\n\r\n(It can be restored from the Recycle Bin.)" },
+            { "确定要把下面这项移到回收站吗？\r\n\r\n{0}\r\n\r\n（通常可从回收站还原；若超出回收站配额或该盘未启用回收站，则会被永久删除）", "Move the following item to the Recycle Bin?\r\n\r\n{0}\r\n\r\n(Usually restorable from the Recycle Bin; if it exceeds the bin's quota, or the drive has no Recycle Bin, it is deleted permanently.)" },
             { "删除失败（代码 {0}）", "Delete failed (code {0})" },
 
             // ---- 命令行 ----
@@ -200,6 +200,7 @@ namespace DiskTreemap
             { "完成: {0:n1}s  文件 {1:n0}  目录 {2:n0}  聚合节点 {3:n0}  最大深度 {4}", "Done: {0:n1}s  files {1:n0}  dirs {2:n0}  agg nodes {3:n0}  max depth {4}" },
             { "已写出 {0} ({1:n1} KB)", "Wrote {0} ({1:n1} KB)" },
             { "错误: ", "Error: " },
+            { "发生未处理的错误：", "Unhandled error: " },
             { "DiskTreemap - 磁盘占用树状图（SpaceSniffer 的原生替代品）", "DiskTreemap - disk usage treemap (a native SpaceSniffer alternative)" },
             { "用法:", "Usage:" },
             { "  DiskTreemap.exe                 打开驱动器/文件夹选择器", "  DiskTreemap.exe                 open the drive / folder picker" },
@@ -284,10 +285,11 @@ namespace DiskTreemap
                                     {
                                         FileAttributes at = fsi.Attributes;
                                         bool isDir = (at & FileAttributes.Directory) != 0;
-                                        bool isLink = (at & FileAttributes.ReparsePoint) != 0;
+                                        // 跳过 junction / 符号链接（目录与文件都跳过）：既防止成环，
+                                        // 也避免文件型链接被按目标大小重复计数
+                                        if ((at & FileAttributes.ReparsePoint) != 0) continue;
                                         if (isDir)
                                         {
-                                            if (isLink) continue;   // skip junctions / symlinks (loop safety)
                                             Dir child = new Dir();
                                             child.Name = fsi.Name;
                                             if (map.TryAdd(fsi.FullName, child))
@@ -2349,6 +2351,7 @@ namespace DiskTreemap
         private Node _focus;
         private readonly Stack<Node> _back = new Stack<Node>();
         private volatile bool _cancel;
+        private volatile int _scanGen;   // 最新扫描代次；旧扫描的结果直接丢弃
 
         // 主题：_autoTheme 跟随系统，关闭后使用 _dark 手动值
         private bool _autoTheme = true;
@@ -2661,6 +2664,9 @@ namespace DiskTreemap
 
         private void StartScan(string path, long minFile)
         {
+            // 每次扫描领一个代次：旧扫描发现代次变了就自行退出，
+            // 即便已经跑完也不会再回写界面，避免两次扫描互相覆盖
+            int gen = ++_scanGen;
             _cancel = false;
             SetScanning(true);
 
@@ -2672,7 +2678,8 @@ namespace DiskTreemap
                 try
                 {
                     Scanner.Stats st;
-                    Node root = Scanner.Scan(scanPath, min, out st, delegate { return _cancel; });
+                    Node root = Scanner.Scan(scanPath, min, out st,
+                        delegate { return _cancel || gen != _scanGen; });
                     return new object[] { root, st };
                 }
                 catch (OperationCanceledException) { return null; }
@@ -2683,6 +2690,7 @@ namespace DiskTreemap
                 {
                     BeginInvoke((MethodInvoker)delegate
                     {
+                        if (gen != _scanGen) return;   // 已被更新的扫描取代，由它负责收尾
                         if (t.IsFaulted)
                         {
                             SetScanning(false);
@@ -2707,6 +2715,7 @@ namespace DiskTreemap
                             Loc.T("DiskTreemap - {0}   （{1}）"), _scanPath, PathPickerForm.Fmt(root.Size));
                     });
                 }
+                // 关窗竞态（ObjectDisposedException 派生自 InvalidOperationException）一并忽略
                 catch (InvalidOperationException) { }
             });
         }
@@ -3005,7 +3014,7 @@ namespace DiskTreemap
 
             DialogResult r = MessageBox.Show(this,
                 string.Format(CultureInfo.InvariantCulture,
-                    Loc.T("确定要把下面这项移到回收站吗？\r\n\r\n{0}\r\n\r\n（可从回收站还原）"), full),
+                    Loc.T("确定要把下面这项移到回收站吗？\r\n\r\n{0}\r\n\r\n（通常可从回收站还原；若超出回收站配额或该盘未启用回收站，则会被永久删除）"), full),
                 Loc.T("移到回收站"), MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             if (r != DialogResult.Yes) return;
 
@@ -3072,6 +3081,8 @@ namespace DiskTreemap
         private const ushort FOF_NOCONFIRMATION = 0x0010;
         private const ushort FOF_ALLOWUNDO = 0x0040;   // -> recycle bin
         private const ushort FOF_NOERRORUI = 0x0400;
+        // 装不进回收站时（超过配额 / 该盘没有回收站）仍要弹系统警告：会被永久删除
+        private const ushort FOF_WANTNUKEWARNING = 0x4000;
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         private struct SHFILEOPSTRUCT
@@ -3095,7 +3106,7 @@ namespace DiskTreemap
             op.wFunc = FO_DELETE;
             op.pFrom = full + "\0";
             op.pTo = null;
-            op.fFlags = (ushort)(FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI);
+            op.fFlags = (ushort)(FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI | FOF_WANTNUKEWARNING);
             return SHFileOperation(ref op);
         }
     }
@@ -3209,6 +3220,16 @@ namespace DiskTreemap
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
+            // 未处理异常兜底：给一句可读的提示，而不是 .NET 的崩溃对话框
+            Application.ThreadException += delegate(object s, ThreadExceptionEventArgs e)
+            {
+                WarnUnhandled(e.Exception);
+            };
+            AppDomain.CurrentDomain.UnhandledException += delegate(object s, UnhandledExceptionEventArgs e)
+            {
+                WarnUnhandled(e.ExceptionObject as Exception);
+            };
+
             string path;
             long min = minFile;
 
@@ -3239,6 +3260,17 @@ namespace DiskTreemap
 
             Application.Run(new MainForm(path, min));
             return 0;
+        }
+
+        private static void WarnUnhandled(Exception ex)
+        {
+            string msg = ex != null ? ex.Message : Loc.T("未知错误");
+            try
+            {
+                MessageBox.Show(Loc.T("发生未处理的错误：") + msg, "DiskTreemap",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            catch { }
         }
 
         private static void EnsureConsole()
