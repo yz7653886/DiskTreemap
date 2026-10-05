@@ -31,6 +31,7 @@ operations.
 | `scan-treemap.ps1` | PowerShell-only scanner producing the treemap JSON. |
 | `build.ps1` | Compiles `DiskTreemap.cs` into `DiskTreemap.exe`. |
 | `build-index.ps1` | Injects a scan JSON into the template to produce `index.html`. |
+| `verify.ps1` | End-to-end acceptance test (CLI + service + security, 31 assertions). |
 | `使用说明.md` | End-user guide (Chinese). |
 
 ## Build
@@ -40,6 +41,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1
 ```
 
 Requires the .NET Framework 4.x C# compiler (`csc.exe`), which ships with Windows.
+
+Run the acceptance suite afterwards (31 assertions across the CLI, the local
+service, and the security boundaries):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File verify.ps1
+```
 
 ## Usage
 
