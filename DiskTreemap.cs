@@ -40,9 +40,9 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("DiskTreemap")]
 [assembly: AssemblyCompany("DiskTreemap contributors")]
 [assembly: AssemblyCopyright("Copyright (C) 2026 DiskTreemap contributors. MIT licensed.")]
-[assembly: AssemblyVersion("1.0.1.0")]
-[assembly: AssemblyFileVersion("1.0.1.0")]
-[assembly: AssemblyInformationalVersion("1.0.1")]
+[assembly: AssemblyVersion("1.0.2.0")]
+[assembly: AssemblyFileVersion("1.0.2.0")]
+[assembly: AssemblyInformationalVersion("1.0.2")]
 [assembly: ComVisible(false)]
 
 namespace DiskTreemap
@@ -139,6 +139,7 @@ namespace DiskTreemap
             { "最小化", "Minimize" },
             { "最大化 / 还原", "Maximize / Restore" },
             { "选择路径 / 重新选择扫描目标", "Choose path / pick another target" },
+            { "选择路径...", "Choose path..." },
             { "后退 (Alt+←)", "Back (Alt+←)" },
             { "上一级 (Backspace)", "Up one level (Backspace)" },
             { "重新扫描 (F5)", "Rescan (F5)" },
@@ -1153,7 +1154,7 @@ namespace DiskTreemap
         public string SelectedPath;
         public long MinFile = 1048576;
 
-        public PathPickerForm(string initialPath)
+        public PathPickerForm(string initialPath, long initialMin)
         {
             Text = Loc.T("DiskTreemap - 选择要扫描的驱动器或文件夹");
             Icon = Style.AppIcon();
@@ -1266,7 +1267,7 @@ namespace DiskTreemap
             _min.Location = new Point(196, 339);
             _min.Size = new Size(160, 24);
             _min.Items.AddRange(MinLabels);
-            _min.SelectedIndex = 2;
+            _min.SelectedIndex = NearestMinIndex(initialMin);
             body.Controls.Add(_min);
 
             _ok = new Button();
@@ -1292,6 +1293,20 @@ namespace DiskTreemap
             Controls.Add(head);   // Fill 先加、Top 后加，Dock 才会正确让出空间
 
             PopulateDrives();
+        }
+
+        // 命令行传进来的阈值未必正好是某个预设值（选择框本来就只有粗档位），
+        // 取最接近的一档，而不是把用户给的 --min 直接丢掉。
+        private static int NearestMinIndex(long bytes)
+        {
+            int best = 2;                          // 无输入时的默认：1 MB
+            long bestDelta = long.MaxValue;
+            for (int i = 0; i < MinValues.Length; i++)
+            {
+                long delta = Math.Abs(MinValues[i] - bytes);
+                if (delta < bestDelta) { bestDelta = delta; best = i; }
+            }
+            return best;
         }
 
         private void HeadPaint(object sender, PaintEventArgs e)
@@ -2874,7 +2889,7 @@ namespace DiskTreemap
 
         private void PickPath()
         {
-            using (PathPickerForm dlg = new PathPickerForm(_scanPath))
+            using (PathPickerForm dlg = new PathPickerForm(_scanPath, _minFile))
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 string path = Canonical(dlg.SelectedPath);
@@ -2975,12 +2990,34 @@ namespace DiskTreemap
 
         private void ShowMenu(Node n)
         {
-            if (n == null) return;
             ContextMenuStrip menu = new ContextMenuStrip();
             menu.Font = Font;
             menu.Renderer = Style.NewRenderer();
             menu.BackColor = Theme.ControlBg;
             menu.ForeColor = Theme.ControlText;
+
+            if (n == null)
+            {
+                // 画布空白处没有对象可操作，给一组视图级命令
+                ToolStripMenuItem miFit = new ToolStripMenuItem(Loc.T("适应窗口"));
+                miFit.Click += delegate { _canvas.ResetView(); _canvas.Invalidate(); };
+                menu.Items.Add(miFit);
+
+                ToolStripMenuItem miRescan = new ToolStripMenuItem(Loc.T("重新扫描 (F5)"));
+                miRescan.Enabled = !string.IsNullOrEmpty(_scanPath);
+                miRescan.Click += delegate { StartScan(_scanPath, _minFile); };
+                menu.Items.Add(miRescan);
+
+                menu.Items.Add(new ToolStripSeparator());
+
+                ToolStripMenuItem miPick = new ToolStripMenuItem(Loc.T("选择路径..."));
+                miPick.Click += delegate { PickPath(); };
+                menu.Items.Add(miPick);
+
+                menu.Closed += delegate { menu.Dispose(); };
+                menu.Show(Cursor.Position);
+                return;
+            }
 
             bool actionable = !n.IsAgg && !string.IsNullOrEmpty(n.FullPath);
 
@@ -3358,7 +3395,7 @@ namespace DiskTreemap
             }
             else
             {
-                using (PathPickerForm dlg = new PathPickerForm(null))
+                using (PathPickerForm dlg = new PathPickerForm(null, minFile))
                 {
                     if (dlg.ShowDialog() != DialogResult.OK) return 0;
                     path = dlg.SelectedPath;

@@ -4,7 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.2] - 2026-10-05
+
+### Added
+
+- Long-path support: the manifest declares `longPathAware`, so on systems with
+  the `LongPathsEnabled` policy (Windows 10 1607+) paths beyond `MAX_PATH` are
+  scanned instead of being skipped and counted as unreadable.
+- Right-clicking empty canvas space now opens a small menu (fit / rescan / pick
+  path) instead of showing nothing at all.
 
 ### Changed
 
@@ -16,6 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `--out` streams the JSON straight to the file instead of building the whole
   document in memory, and the scanner releases its directory dictionary and the
   walk tree as it converts to the node tree, lowering peak memory on large scans.
+- `--min` given without a root now presets the threshold in the picker (nearest
+  preset) instead of being silently ignored.
+
+[1.0.2]: https://github.com/yz7653886/DiskTreemap/releases/tag/v1.0.2
 
 ## [1.0.1] - 2026-10-05
 

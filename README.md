@@ -126,7 +126,7 @@ Options:
 | Option | Meaning |
 | --- | --- |
 | `--out <file>` / `-o` | Scan only, write the JSON tree to a file and exit (no window). A root directory must be given explicitly. |
-| `--min <bytes>` / `--min-file` | Aggregation threshold (default `1048576`). `0` disables aggregation. |
+| `--min <bytes>` / `--min-file` | Aggregation threshold (default `1048576`). `0` disables aggregation. With no root it presets the threshold in the picker. |
 | `--help` / `-h` / `/?` | Show help. |
 
 The exit code is `2` on a usage or scan error, `0` otherwise.
@@ -143,8 +143,9 @@ The exit code is `2` on a usage or scan error, `0` otherwise.
 Mouse: drag to pan, wheel to zoom, double-click a folder cell to enter it,
 double-click a file to open it when it already sits directly in the current
 folder (otherwise the view jumps to the folder that contains it), and right-click
-any cell for the native action menu. Drag any edge or corner of the borderless
-window to resize it.
+any cell for the native action menu. Right-clicking empty canvas space opens a
+small menu with fit / rescan / pick path. Drag any edge or corner of the
+borderless window to resize it.
 
 ## Design notes
 
@@ -178,6 +179,11 @@ window to resize it.
 - **Streaming JSON** — `--out` writes node by node straight to the file rather
   than building the whole document in memory, and the scanner releases its
   directory dictionary and the walk tree as it converts to the node tree.
+- **Long paths** — the manifest declares `longPathAware`, so paths beyond
+  `MAX_PATH` are scanned on systems where the `LongPathsEnabled` policy is on
+  (Windows 10 1607+). Elsewhere they are skipped and counted like any other
+  unreadable entry. Moving such a path to the Recycle Bin still fails, because
+  `SHFileOperation` does not accept long paths.
 
 ## Antivirus false positives
 
