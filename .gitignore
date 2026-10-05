@@ -1,0 +1,10 @@
+# scan outputs / generated data
+demo.json
+treemap.json
+*.treemap.json
+
+# scratch
+_check/
+bin/
+obj/
+*.log
