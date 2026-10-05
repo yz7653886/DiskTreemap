@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The scanner enumerates directories with the native `FindFirstFileEx`
+  (`FindExInfoBasic` + `FIND_FIRST_EX_LARGE_FETCH`) instead of `DirectoryInfo`,
+  taking name, attributes and size from a single call and skipping the 8.3
+  short-name lookup. On a full `C:\Windows` (310 k files / 148 k directories) a
+  scan went from ~39 s to ~6.5 s.
+- `--out` streams the JSON straight to the file instead of building the whole
+  document in memory, and the scanner releases its directory dictionary and the
+  walk tree as it converts to the node tree, lowering peak memory on large scans.
+
 ## [1.0.1] - 2026-10-05
 
 ### Fixed

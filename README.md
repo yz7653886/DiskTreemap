@@ -18,9 +18,11 @@ browser, no local server, no runtime to install beyond what ships with Windows.
   with no browser and no HTTP service involved.
 - **SpaceSniffer-style picker** — on launch you choose a drive or a folder and an
   aggregation threshold, instead of scanning something immediately.
-- **Parallel scanner** — walks the tree with `Parallel.ForEach` (CPU x2 workers)
-  and skips junctions / symlinks (files as well as directories) to avoid loops
-  and double counting.
+- **Fast scanner** — walks the tree with `Parallel.ForEach` (CPU x2 workers) and
+  enumerates directories through the native `FindFirstFileEx` (`FindExInfoBasic`
+  + large fetch), so name, attributes and size arrive in one call with no
+  per-entry syscall and no 8.3 short-name lookup. Skips junctions / symlinks
+  (files as well as directories) to avoid loops and double counting.
 - **Honest totals** — directories that cannot be read are skipped and counted;
   the count is reported in the CLI output and the window title, so an
   under-reported size is never silently passed off as exact.
@@ -169,6 +171,13 @@ window to resize it.
 - **Borderless resizing** — the docked children (title bar, canvas, status bar)
   return `HTTRANSPARENT` in the 6 px border zone so `WM_NCHITTEST` reaches the
   form and all eight resize directions work.
+- **Native directory enumeration** — the scanner keeps `DirectoryInfo` /
+  `FileInfo` out of the hot path and reads `WIN32_FIND_DATA` straight from
+  `FindFirstFileEx`. On a full `C:\Windows` (310 k files / 148 k directories)
+  this took a scan from ~39 s down to ~6.5 s.
+- **Streaming JSON** — `--out` writes node by node straight to the file rather
+  than building the whole document in memory, and the scanner releases its
+  directory dictionary and the walk tree as it converts to the node tree.
 
 ## Antivirus false positives
 
